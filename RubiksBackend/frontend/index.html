@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rubik's Cube Solver</title>
+
+    <!-- Twisty Player (WORKING VERSION – DO NOT TOUCH) -->
+    <script src="https://cdn.cubing.net/v0/js/cubing/twisty" type="module"></script>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="apple-light">
+
+    <h1 class="title">Rubik's Cube Solver</h1>
+
+    <button id="themeToggle" class="theme-toggle">🌙 Dark Mode</button>
+
+    <div class="container">
+
+        <!-- Cube Viewer -->
+        <div id="cube-viewer" class="glass-card cube-card">
+            <twisty-player
+                id="twisty"
+                puzzle="3x3x3"
+                background="light"
+                control-panel="none">
+            </twisty-player>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls glass-card">
+            <h2 class="controls-title">Controls</h2>
+
+            <button id="scrambleBtn" class="glass-btn">🔀 Scramble</button>
+            <button id="playBtn"     class="glass-btn">▶️ Play Animation</button>
+            <button id="resetBtn"    class="glass-btn">🔄 Reset Cube</button>
+            <button id="solveVirtualBtn" class="glass-btn">🧠 Solve Virtual Cube</button>
+            <button id="solveExternalBtn" class="glass-btn">📦 Solve Pasted / Scanned Cube</button>
+
+            <!-- ✅ NEW: STEP CONTROLS -->
+            <button id="prevStepBtn" class="glass-btn">⏮️ Back</button>
+            <button id="nextStepBtn" class="glass-btn">⏭️ Forward</button>
+            <div id="stepLabel" style="margin-top: 6px; font-weight: 600;"></div>
+
+            <hr />
+
+            <!-- Cube string input -->
+            <h3>Paste cube string (URFDLB)</h3>
+            <textarea
+                id="cubeStringInput"
+                rows="3"
+                placeholder="54 characters (URFDLB order)">
+            </textarea>
+
+            <button id="displayStringBtn" class="glass-btn">
+                👁️ Display Cube String
+            </button>
+
+            <h3>Solution moves:</h3>
+            <pre id="moveList">No solution yet.</pre>
+        </div>
+    </div>
+
+    <!-- Cube.js -->
+    <script src="https://cdn.jsdelivr.net/npm/cubejs/lib/cube.min.js"></script>
+
+    <!-- App logic -->
+    <script src="app.js"></script>
+
+</body>
+</html>
