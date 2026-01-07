@@ -7,10 +7,10 @@ import os
 import i18n
 import kociemba
 
-from fix_cube import fix_cube
-from video import webcam
-from config import config
-from constants import ROOT_DIR, E_INCORRECTLY_SCANNED, E_ALREADY_SOLVED
+from backend.fix_cube import fix_cube
+from backend.video import webcam
+from backend.config import config
+from backend.constants import ROOT_DIR, E_INCORRECTLY_SCANNED, E_ALREADY_SOLVED
 import itertools
 import kociemba
 
@@ -88,8 +88,7 @@ def remap_scanner_to_standard_by_centers(cube: str) -> str:
     return "".join(center_map[c] for c in cube)
 
 # ---------------- I18N ----------------
-locale = config.get_setting('locale') or 'en'
-config.set_setting('locale', locale)
+locale = 'en'
 
 i18n.load_path.append(os.path.join(ROOT_DIR, 'translations'))
 i18n.set('filename_format', '{locale}.{format}')

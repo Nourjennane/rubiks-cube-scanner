@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 # vim: fenc=utf-8 ts=4 sw=4 et
 import cv2
-from colordetection import color_detector
-from config import config
-from helpers import get_next_locale
+from backend import color_processing 
+from backend.config import config
+from backend.helpers import get_next_locale
+from backend.color_processing import color_detector
 import i18n
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
-from constants import (
+from backend.constants import (
     COLOR_PLACEHOLDER,
     LOCALES,
     ROOT_DIR,
@@ -103,7 +104,7 @@ class Webcam:
                     self.frame,
                     (x1 + 1, y1 + 1),
                     (x2 - 1, y2 - 1),
-                    color_detector.get_prominent_color(stickers[index]),
+                    color_processing.get_prominent_color(stickers[index]),
                     -1
                 )
 
@@ -245,8 +246,8 @@ class Webcam:
 
             roi_blur = cv2.GaussianBlur(roi, (5, 5), 0)
             avg_bgr = color_detector.get_dominant_color(roi_blur)
-
             closest = color_detector.get_closest_color(avg_bgr)
+           
 
             # ❌ Reject uncertain colors
             if closest['color_name'] is None:
@@ -255,8 +256,7 @@ class Webcam:
             if index not in self.average_sticker_colors:
                 self.average_sticker_colors[index] = []
 
-            self.average_sticker_colors[index].append(closest['color_bgr'])
-
+            self.average_sticker_colors[index].append(closest['bgr'])
             if len(self.average_sticker_colors[index]) > max_average_rounds:
                 self.average_sticker_colors[index].pop(0)
 
@@ -317,10 +317,8 @@ class Webcam:
             print("🎉 All faces scanned")
             self.finished = True
 
-    def get_font(self, size=TEXT_SIZE):
-        """Load the truetype font with the specified text size."""
-        font_path = '{}/assets/arial-unicode-ms.ttf'.format(ROOT_DIR)
-        return ImageFont.truetype(font_path, size)
+    def get_font(self, size):
+        return ImageFont.load_default()
 
     def render_text(self, text, pos, color=(255, 255, 255), size=TEXT_SIZE, anchor='lt'):
         """
@@ -415,12 +413,12 @@ class Webcam:
         Create a 2D cube state visualization and draw the self.result_state.
         """
         grid = {
-            'white' : [1, 0],
-            'orange': [0, 1],
-            'green' : [1, 1],
-            'red'   : [2, 1],
-            'blue'  : [3, 1],
-            'yellow': [1, 2],
+            'U': [1, 0],
+            'L': [0, 1],
+            'F': [1, 1],
+            'R': [2, 1],
+            'B': [3, 1],
+            'D': [1, 2],
         }
 
         side_offset = MINI_STICKER_AREA_TILE_GAP * 3
@@ -449,7 +447,7 @@ class Webcam:
 
                     foreground_color = COLOR_PLACEHOLDER
                     if mapped_side in self.result_state:
-                        foreground_color = color_detector.get_prominent_color(
+                        foreground_color = color_processing.get_prominent_color(
                             self.result_state[mapped_side][index]
                         )
                     cv2.rectangle(self.frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
@@ -458,10 +456,12 @@ class Webcam:
     def get_result_notation(self):
         """
         Build a Kociemba-compatible cube string in URFDLB order.
-        Faces are determined ONLY by their CENTER color (cube-invariant).
-        Each face is rotated (legal rotations only) before export.
+        Assumes result_state keys are already U R F D L B.
         """
 
+        FACE_ORDER = ['U', 'R', 'F', 'D', 'L', 'B']
+
+        # Map center colors → face letters
         COLOR_TO_FACE = {
             'white':  'U',
             'yellow': 'D',
@@ -471,38 +471,19 @@ class Webcam:
             'orange': 'L'
         }
 
-        # Which scanned side corresponds to U/R/F/D/L/B?
-        face_to_scanned_side = {}
-
-        for scanned_side, stickers in self.result_state.items():
-            center_bgr = stickers[4]
-            center_color = color_detector.get_closest_color(center_bgr)['color_name']
-            if center_color is None:
-                raise ValueError("Uncertain center color during export")
-
-            face_letter = COLOR_TO_FACE[center_color]
-            face_to_scanned_side[face_letter] = scanned_side
-
-        if len(face_to_scanned_side) != 6:
-            raise ValueError("Invalid cube: could not identify all 6 faces from centers")
-
         cube_string = ""
-        for face in ['U', 'R', 'F', 'D', 'L', 'B']:
-            scanned_side = face_to_scanned_side[face]
-            stickers = self.result_state[scanned_side]
 
-            
+        for face in FACE_ORDER:
+            stickers = self.result_state[face]
+
             for bgr in stickers:
-                c = color_detector.get_closest_color(bgr)['color_name']
-                if c is None:
-                    raise ValueError("Uncertain sticker color during export")
-                cube_string += COLOR_TO_FACE[c]
+                color_name = color_detector.get_closest_color(bgr)['color_name']
+                cube_string += color_name
 
         return cube_string
 
     def state_already_solved(self):
-        """Find out if the cube hasn't been solved already."""
-        for side in ['white', 'red', 'green', 'yellow', 'orange', 'blue']:
+        for side in self.result_state.keys():
             center_bgr = self.result_state[side][4]
             for bgr in self.result_state[side]:
                 if center_bgr != bgr:
@@ -526,12 +507,12 @@ class Webcam:
                 if key == 32:
                     self.update_snapshot_state()
 
-                if key == ord(SWITCH_LANGUAGE_KEY):
+                if key == SWITCH_LANGUAGE_KEY:
                     next_locale = get_next_locale(config.get_setting('locale'))
                     config.set_setting('locale', next_locale)
                     i18n.set('locale', next_locale)
 
-            if key == ord(CALIBRATE_MODE_KEY):
+            if key == CALIBRATE_MODE_KEY:
                 self.reset_calibrate_mode()
                 self.calibrate_mode = not self.calibrate_mode
 

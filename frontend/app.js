@@ -1,6 +1,7 @@
 console.log("APP JS LOADED");
 
 // ---------------- DOM ----------------
+const resetVirtualBtn = document.getElementById("resetVirtualBtn");
 const twisty      = document.getElementById("twisty");
 const scrambleBtn = document.getElementById("scrambleBtn");
 
@@ -16,95 +17,78 @@ const nextStepBtn = document.getElementById("nextStepBtn");
 const stepLabel   = document.getElementById("stepLabel");
 const solveVirtualBtn = document.getElementById("solveVirtualBtn");
 const solveExternalBtn = document.getElementById("solveExternalBtn");
+console.log("moveList element =", moveList);
+
+moveList.style.whiteSpace = "pre-wrap";
+moveList.style.maxHeight = "200px";
+moveList.style.overflowY = "auto";
+moveList.style.display = "block";
 // ---------------- LOGGER ----------------
 function log(text) {
-    console.log(text);
-    moveList.textContent = text;
+  console.log(text);
+  // moveList.textContent = text;  // ❌ remove this line
 }
 
 // ---------------- STATE ----------------
-
-let scrambleAlg = "";
 let solutionAlg = "";
+let isPlaying = false;
+let playTimer = null;
+let playedAlg = "";   // moves already applied
+let currentSetupAlg = "";
+let scrambleAlg = "";
 let cubeModel   = null;
 let solutionMoves = [];   // ["R", "U", "R'", ...]
 let stepIndex = 0;        // current step (0 → solutionMoves.length)
-let baseMode = "alg";          // "alg" | "serialized"
-let baseSerialized = "";       // holds scanned cube state
 let baseSetupAlg = "";         // holds scrambleAlg when using alg mode
 const BACKEND_SOLVE_URL   = "http://127.0.0.1:8000/solve";
 const BACKEND_SCAN_START = "http://127.0.0.1:8000/scan/start";
 
 // ---------------- HELPERS ----------------
-function applyMovesToScannedCube(pastedReversedSolution) {
-    if (!baseSerialized) {
-        log("No scanned cube loaded.");
-        return;
-    }
-
-    // Reset cube to scanned state
-    twisty.setAttribute("experimental-setup-serialized", baseSerialized);
-    twisty.setAttribute("experimental-setup-alg", "");
-    twisty.setAttribute("alg", "");
-    twisty.jumpToStart?.();
-
-    // Apply moves
-    solutionMoves = moves
-        .trim()
-        .replace(/[’‘`]/g, "'")
-        .split(/\s+/);
-
-    solutionAlg = solutionMoves.join(" ");
-    stepIndex = solutionMoves.length;
-
-    twisty.setAttribute("alg", solutionAlg);
-    updateStepLabel();
-
-    log("Applied reversed solution to scanned cube ✅");
+function cubeDictToString(cubeDict) {
+  return [
+    ...cubeDict.U,
+    ...cubeDict.R,
+    ...cubeDict.F,
+    ...cubeDict.D,
+    ...cubeDict.L,
+    ...cubeDict.B
+  ].join("");
 }
-function loadExternalCubeFromURFDLB(raw54) {
-    const s = raw54.trim().toUpperCase().replace(/[^URFDLB]/g, "");
 
-    if (s.length !== 54) {
-        log("❌ Paste a 54-character cube string using only U R F D L B.");
-        return;
-    }
-
-    // store it for Solve External
-    baseMode = "serialized";
-    baseSerialized = s;
-    baseSetupAlg = "";
-
-    // show it in 3D
-    twisty.setAttribute("experimental-setup-serialized", baseSerialized);
-    twisty.setAttribute("experimental-setup-alg", "");
-    twisty.setAttribute("alg", "");
-    twisty.jumpToStart?.();
-
-    // keep a model too (optional but useful)
-    cubeModel = new Cube(baseSerialized);
-
-    solutionMoves = [];
-    solutionAlg = "";
-    stepIndex = 0;
-    updateStepLabel();
-
-    log("External cube loaded ✅ Now click Solve Pasted / Scanned Cube.");
+function unlockForPlayback() {
+  twisty.removeAttribute("experimental-setup-alg");
 }
+function showSolution() {
+  if (!solutionMoves.length) {
+    moveList.textContent = "";
+    return;
+  }
+  moveList.textContent = solutionMoves.join(" ");
+}
+
+function invertMove(m) {
+  if (m.endsWith("2")) return m;
+  if (m.endsWith("'")) return m.slice(0, -1);
+  return m + "'";
+}
+
+
+function enterStepModeFromSetupAlg(setupAlg) {
+  currentSetupAlg = setupAlg;
+  playedAlg = "";                // 🔑 reset played moves
+
+  twisty.setAttribute("experimental-setup-alg", setupAlg);
+  twisty.setAttribute("alg", "");  // no auto-play
+  twisty.jumpToStart?.();
+}
+
+
 function updateStepLabel() {
     stepLabel.textContent = solutionMoves.length
         ? `Step ${stepIndex} / ${solutionMoves.length}`
         : "";
 }
 
-function renderCurrentStep() {
-    const partial = solutionMoves.slice(0, stepIndex).join(" ");
-
-    twisty.setAttribute("alg", partial);
-    twisty.jumpToStart?.();
-
-    updateStepLabel();
-}
 function reverseAlgorithm(alg) {
     if (!alg) return "";
 
@@ -203,52 +187,64 @@ function cubeStringToDict(facelets) {
 
 // ---------------- LOAD MOVES ----------------
 function loadCubeFromMoves(movesRaw) {
-    const moves = movesRaw
-        .trim()
-        .replace(/[’‘`]/g, "'")
-        .replace(/\s+/g, " ");
+  const moves = movesRaw
+    .trim()
+    .replace(/[’‘`]/g, "'")
+    .replace(/\s+/g, " ");
 
-    if (!moves) {
-        log("❌ Please paste a move sequence.");
-        return;
-    }
+  if (!moves) {
+    log("❌ Please paste a move sequence.");
+    return;
+  }
 
-    try {
-        // ✅ IMPORTANT: switch twisty to ALG mode by REMOVING serialized attribute
-        twisty.removeAttribute("experimental-setup-serialized");
+  try {
+    cubeModel = new Cube();
+    cubeModel.move(moves);
 
-        // Always start from solved cube if none exists
-        if (!cubeModel) {
-            cubeModel = new Cube();
-            scrambleAlg = "";
-        }
+    // 🔑 THIS IS THE KEY LINE
+    scrambleAlg = moves;
 
-        // Apply moves to logical cube
-        cubeModel.move(moves);
+    solutionMoves = [];
+    solutionAlg = "";
+    stepIndex = 0;
+    isPlaying = false;
 
-        // Keep full history so it accumulates
-        scrambleAlg = scrambleAlg ? `${scrambleAlg} ${moves}` : moves;
-        baseMode = "alg";
-        baseSetupAlg = scrambleAlg;
-        baseSerialized = "";
-        // ✅ Render by ALG (setup-alg)
-        twisty.setAttribute("experimental-setup-alg", scrambleAlg);
-        twisty.setAttribute("alg", "");
-        twisty.jumpToStart?.();
+    twisty.removeAttribute("experimental-setup-serialized");
+    twisty.setAttribute("experimental-setup-alg", scrambleAlg);
+    twisty.setAttribute("alg", "");
+    twisty.jumpToStart?.();
 
-        solutionAlg = "";
+    updateStepLabel();
+    log("Moves applied:\n" + scrambleAlg);
 
-        log("Moves applied ✅");
-
-    } catch (e) {
-        console.error(e);
-        log("❌ Invalid move sequence.");
-    }
+  } catch (e) {
+    console.error(e);
+    log("❌ Invalid move sequence.");
+  }
 }
+resetVirtualBtn.onclick = () => {
+  console.log("♻️ Reset Virtual Cube");
 
-// ✅ YOU WERE MISSING THESE → input box "does nothing" without them
-displayStringBtn.onclick = () => {
-    loadCubeFromMoves(cubeStringInput.value);
+  // 🧠 Reset internal state
+  scrambleAlg = "";
+  solutionAlg = "";
+  solutionMoves = [];
+  stepIndex = 0;
+  playedAlg = "";
+  isPlaying = false;
+  currentSetupAlg = "";
+  cubeModel = new Cube(); // solved cube
+
+  // 🧼 Reset UI
+  moveList.textContent = "No solution yet.";
+  stepLabel.textContent = "";
+
+  // 🧊 SAFE Twisty reset (NO attribute removal)
+  twisty.setAttribute("experimental-setup-alg", "");
+  twisty.setAttribute("alg", "");
+  twisty.jumpToStart?.();
+
+  console.log("✅ Cube fully reset (solved, stable)");
 };
 
 cubeStringInput.addEventListener("paste", () => {
@@ -264,23 +260,23 @@ function randomScramble(n=20) {
 }
 
 scrambleBtn.onclick = () => {
-    scrambleAlg = randomScramble();
+  // 1️⃣ Generate scramble
+  scrambleAlg = randomScramble();
 
-    cubeModel = new Cube();
-    cubeModel.move(scrambleAlg);
+  // 2️⃣ Update logical cube (optional but good practice)
+  cubeModel = new Cube();
+  cubeModel.move(scrambleAlg);
 
-    // 🔒 VIRTUAL MODE = ALG BASE
-    twisty.removeAttribute("experimental-setup-serialized");
-    twisty.setAttribute("experimental-setup-alg", scrambleAlg);
-    twisty.setAttribute("alg", "");
-    twisty.jumpToStart?.();
+  // 3️⃣ Clear any existing solution state
+  solutionMoves = [];
+  stepIndex = 0;
+  updateStepLabel();
 
-    solutionMoves = [];
-    solutionAlg = "";
-    stepIndex = 0;
-    updateStepLabel();
+  // 4️⃣ SHOW scrambled cube and FREEZE it
+  enterStepModeFromSetupAlg(scrambleAlg);
 
-    log("Scramble:\n" + scrambleAlg);
+  // 5️⃣ Log
+  log("Scramble:\n" + scrambleAlg);
 };
 
 // ---------------- SOLVE ----------------
@@ -310,116 +306,148 @@ const MOVE_REMAP = {
     "D'": "D'",
     "D2": "D2",
 };
+
 solveVirtualBtn.onclick = async () => {
-    if (!scrambleAlg) {
-        log("No virtual scramble to solve.");
-        return;
-    }
+  if (!scrambleAlg || !scrambleAlg.trim()) {
+    log("❌ No virtual scramble to solve.");
+    return;
+  }
 
-    // Rebuild cube from scramble (logic only)
-    const cube = new Cube();
-    cube.move(scrambleAlg);
+  console.log("🧠 SOLVE VIRTUAL CLICKED");
+  console.log("ScrambleAlg =", scrambleAlg);
 
-    const res = await fetch(BACKEND_SOLVE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            cube: cubeStringToDict(cube.asString())
-        })
-    });
+  // 1️⃣ Build logical cube from scramble
+  const cube = new Cube();
+  cube.move(scrambleAlg);
 
-    const data = await res.json();
+  // 2️⃣ Convert to 54-char URFDLB string
+  const cubeString = cube.asString();
+  console.log("📤 Sending cube string:", cubeString, cubeString.length);
 
+  // 3️⃣ Send to backend solver
+  const res = await fetch(BACKEND_SOLVE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cube: cubeString })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error("❌ Solve failed:", data);
+    log("❌ Error while solving virtual cube.");
+    return;
+  }
+
+  // 4️⃣ Extract solution moves
+  if (Array.isArray(data.moves)) {
     solutionMoves = data.moves;
-    solutionAlg = solutionMoves.join(" ");
-    stepIndex = 0;
+  } else if (typeof data.moves === "string") {
+    solutionMoves = data.moves.trim().split(/\s+/);
+  } else {
+    log("❌ Invalid solver response.");
+    return;
+  }
 
-    // 🔥 CRITICAL: re-assert scramble as base
-    twisty.removeAttribute("experimental-setup-serialized");
-    twisty.setAttribute("experimental-setup-alg", scrambleAlg);
-    twisty.setAttribute("alg", "");
-    twisty.jumpToStart?.();
+  solutionAlg = solutionMoves.join(" ");
+  console.log("✅ Solution:", solutionAlg);
 
-    updateStepLabel();
-    log("Solution (virtual cube):\n" + solutionAlg);
+  // 5️⃣ SHOW solution in UI
+  moveList.textContent = solutionAlg;
+
+  // 🔑 🔑 🔑 THIS WAS MISSING
+  // Give Twisty an animation timeline
+  twisty.setAttribute("alg", solutionAlg);
+
+  // 6️⃣ Reset cube to scrambled state (static setup)
+  currentSetupAlg = scrambleAlg;
+  playedAlg = "";
+  stepIndex = 0;
+  isPlaying = false;
+
+  twisty.removeAttribute("experimental-setup-serialized");
+  twisty.setAttribute("experimental-setup-alg", scrambleAlg);
+  twisty.jumpToStart?.();
+
+  updateStepLabel();
+  log("✅ Virtual cube ready — press ▶ to animate.");
 };
-
 solveExternalBtn.onclick = () => {
+  const pasted = cubeStringInput.value
+    .trim()
+    .replace(/[’‘`]/g, "'")
+    .replace(/\s+/g, " ");
 
-    // 🔑 FIRST: lock current cube if not already scanned
-    if (!baseSerialized && cubeModel) {
-        baseSerialized = cubeModel.asString();
-        baseMode = "serialized";
-    }
+  if (!pasted) {
+    log("❌ Paste reversed solution.");
+    return;
+  }
 
-    // ❌ NOW check
-    if (!baseSerialized) {
-        log("❌ No scanned cube loaded.");
-        return;
-    }
+  // 1️⃣ This is the scramble that produced the scanned cube
+  const setupAlg = pasted;
 
-    const pasted = cubeStringInput.value
-        .trim()
-        .replace(/[’‘`]/g, "'");
+  // 2️⃣ Compute the REAL solution (inverse of pasted)
+  solutionMoves = reverseAlgorithm(setupAlg).split(/\s+/);
+  solutionAlg   = solutionMoves.join(" ");
 
-    if (!pasted) {
-        log("❌ Paste the reversed solution moves.");
-        return;
-    }
+  // 3️⃣ Reset state
+  stepIndex = 0;
+  isPlaying = false;
 
-    const realSolution = reverseAlgorithm(pasted);
+  // 4️⃣ ENTER STEP MODE (static, safe)
+  currentSetupAlg = setupAlg;
+  twisty.removeAttribute("experimental-setup-serialized");
+  twisty.setAttribute("experimental-setup-alg", setupAlg);
+  twisty.setAttribute("alg", "");
+  twisty.jumpToStart?.();
 
-    solutionMoves = realSolution.split(/\s+/);
-    solutionAlg   = solutionMoves.join(" ");
-    stepIndex = 0;
+  // 5️⃣ Update UI
+  updateStepLabel();
+  showSolution();
 
-    twisty.setAttribute("experimental-setup-serialized", baseSerialized);
-    twisty.setAttribute("experimental-setup-alg", "");
-    twisty.setAttribute("alg", "");
-    twisty.jumpToStart?.();
-
-    updateStepLabel();
-    log("Solution (from reversed input):\n" + solutionAlg);
+  log("✅ Scanned cube ready. Use ▶ / ◀ or ▶▶ Play.");
 };
 
 nextStepBtn.onclick = () => {
-    if (!solutionMoves.length) return;
-    stepIndex = Math.min(stepIndex + 1, solutionMoves.length);
-    renderCurrentStep();
+  isPlaying = false;
+  if (stepIndex >= solutionMoves.length) return;
+
+  const move = solutionMoves[stepIndex];
+  playedAlg = playedAlg ? `${playedAlg} ${move}` : move;
+
+  twisty.setAttribute("alg", playedAlg);
+
+  stepIndex++;
+  updateStepLabel();
 };
 
 prevStepBtn.onclick = () => {
-    if (!solutionMoves.length) return;
-    stepIndex = Math.max(stepIndex - 1, 0);
-    renderCurrentStep();
+  isPlaying = false;
+  if (stepIndex <= 0) return;
+
+  stepIndex--;
+  playedAlg = solutionMoves.slice(0, stepIndex).join(" ");
+
+  twisty.setAttribute("alg", playedAlg);
+  updateStepLabel();
 };
 // ---------------- PLAY ----------------
 playBtn.onclick = () => {
-    if (!solutionAlg) return;
-    twisty.jumpToStart();
-    twisty.play();
+  twisty.play();
 };
+
 
 // ---------------- RESET ----------------
 resetBtn.onclick = () => {
-    cubeModel = null;
-    scrambleAlg = "";
-    solutionAlg = "";
+  isPlaying = false;
+  stepIndex = 0;
+  playedAlg = "";
 
-    // 1️⃣ clear alg FIRST
-    twisty.setAttribute("alg", "");
+  if (currentSetupAlg) enterStepModeFromSetupAlg(currentSetupAlg);
 
-    // 2️⃣ defer setup change to next tick (VERY IMPORTANT)
-    setTimeout(() => {
-        twisty.setAttribute("experimental-setup-serialized", baseSerialized);
-        twisty.setAttribute("experimental-setup-alg", "");
-        twisty.jumpToStart?.();
-    }, 0);
-
-    log("Reset.");
+  updateStepLabel();
+  log("Reset.");
 };
-
-
 
 // ---------------- THEME ----------------
 document.body.classList.add("apple-light");
@@ -427,3 +455,4 @@ themeToggle.onclick = () => {
     document.body.classList.toggle("apple-dark");
     document.body.classList.toggle("apple-light");
 };
+

@@ -7,16 +7,41 @@ from typing import Dict, List
 from solver import solve_cube
 from cube_validation import is_cube_solvable
 
+
+class SolveRequest(BaseModel):
+    cube: str
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5500", "http://127.0.0.1:5500", "*"],
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.post("/solve")
+def solve_endpoint(payload: SolveRequest):
+    cube_string = payload.cube
+
+    if len(cube_string) != 54:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Cube string must have length 54."}
+        )
+
+    if not is_cube_solvable(cube_string):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Cube is not solvable."}
+        )
+
+    moves = solve_cube(cube_string)
+    return {"moves": moves}
 FACE_ORDER = ["U", "R", "F", "D", "L", "B"]
 
 COLOR_TO_FACE = {
