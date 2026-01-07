@@ -26,11 +26,11 @@ The project is split into **two clearly separated layers**.
 ### 🐍 Backend (Python)
 
 Handles all computation and reasoning:
-- 📷 Camera access and video frame capture  
-- 🎨 Color detection and normalization  
-- 🧩 Face and cube reconstruction  
-- ⚠️ Physical cube validation  
-- 🤖 Solving algorithm computation  
+- Camera access and video frame capture  
+-  Color detection and normalization  
+-  Face and cube reconstruction  
+-  Physical cube validation  
+-  Solving algorithm computation  
 
 ### 🌐 Frontend (Web)
 
@@ -69,16 +69,16 @@ Each stage is independent, making debugging and future improvements straightforw
 ## 🧰 Tech stack
 
 ### Backend
-- 🐍 Python 3  
-- 📷 OpenCV  
-- 🔢 NumPy  
-- 🧠 Custom cube validation & solving logic  
+- Python 3  
+-  OpenCV  
+- NumPy  
+- Custom cube validation & solving logic  
 
 ### Frontend
-- 🌐 HTML  
-- 🎨 CSS  
-- ⚙️ JavaScript  
-- 🧊 Twisty Player (3D cube visualization)  
+- HTML  
+-  CSS  
+-  JavaScript  
+- Twisty Player (3D cube visualization)  
 
 ---
 
@@ -131,21 +131,21 @@ Open `frontend/index.html` directly in your browser
 ## 🎥 Demo
 
 A short demo video demonstrates:
-- 📷 Scanning a real cube  
-- 🧮 Computing a solution  
-- 🧊 Playing the solution step by step on the 3D cube  
+- Scanning a real cube  
+- Computing a solution  
+- Playing the solution step by step on the 3D cube  
 
-📹 *Demo video link coming soon.*
+📹 https://www.youtube.com/watch?v=wHzycR4h8b0
 
 ---
 
 ## 🎯 Motivation
 
 This project was built to explore the intersection of:
-- 👁️ Computer vision applied to physical objects  
-- 🧩 Constraint-based validation problems  
-- 🤖 Algorithmic reasoning  
-- 🌐 Full-stack system integration  
+-  Computer vision applied to physical objects  
+- Constraint-based validation problems  
+-  Algorithmic reasoning  
+-  Full-stack system integration  
 
 Real-world cube scanning introduces noise, lighting issues, and ambiguity — a major focus of the project was making the system **robust, not just correct**.
 
@@ -153,11 +153,11 @@ Real-world cube scanning introduces noise, lighting issues, and ambiguity — a 
 
 ## 🔮 Possible improvements
 
-✨ More robust color detection under difficult lighting  
-⚡ Faster multi-face scanning  
-📱 Mobile camera support  
-📉 Solution move count optimization  
-📤 Exporting solutions in standard cube notation formats  
+ More robust color detection under difficult lighting  
+ Faster multi-face scanning  
+ Mobile camera support  
+ Solution move count optimization  
+ Exporting solutions in standard cube notation formats  
 
 ---
 
